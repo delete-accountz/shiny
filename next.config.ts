@@ -13,7 +13,7 @@ const securityHeaders=[
 const nextConfig:NextConfig={
  poweredByHeader:false,
  devIndicators:false,
- outputFileTracingExcludes:{"/*":["./Storage/**/*","./Logs/**/*","./.env","./.env.*","./.next/**/*","./tests/**/*","./docs/**/*","./migrations/**/*"]},
+ outputFileTracingExcludes:{"/*":["./Storage/**/*","./Logs/**/*","./.env","./.env.*","./tests/**/*","./docs/**/*","./migrations/**/*"]},
  headers:async()=>[{source:"/:path*",headers:securityHeaders}]
 };
 
