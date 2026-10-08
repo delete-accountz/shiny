@@ -1,0 +1,32 @@
+# Root-only local data and secrets
+.env
+.env.*
+/Storage/
+/Logs/
+/.next/
+/.vercel/
+
+# Development-only material
+/tests/
+/docs/
+/migrations/
+/scripts/
+/coverage/
+/playwright-report/
+/test-results/
+/.tmp/
+/temp/
+/tmp/
+/node_modules/
+
+# Archives and local database artifacts
+*.bak
+*.backup
+*.dump
+*.sqlite
+*.sqlite3
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx

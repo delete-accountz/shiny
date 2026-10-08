@@ -1,0 +1,22 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["gru1"],
+  "framework": "nextjs",
+  "crons": [
+    {
+      "path": "/Api/Internal/Reconciliation",
+      "schedule": "*/5 * * * *"
+    }
+  ],
+  "functions": {
+    "app/Api/Checkout/route.ts": {
+      "maxDuration": 30
+    },
+    "app/Api/Webhooks/Promisse/route.ts": {
+      "maxDuration": 10
+    },
+    "app/Api/Orders/[id]/Reconcile/route.ts": {
+      "maxDuration": 30
+    }
+  }
+}

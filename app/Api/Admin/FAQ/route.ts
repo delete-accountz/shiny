@@ -1,0 +1,12 @@
+import {NextRequest,NextResponse} from "next/server";
+import {z} from "zod";
+import {allowAttempt,clientKey,validAdminOwnerSession,validCsrf} from "@/Lib/SECURITY";
+import {audit} from "@/Lib/AUDIT";
+import {createFaq,readFaq} from "@/Lib/FAQ";
+import {parseJsonBody} from "@/Lib/BODY_LIMITS";
+const maxBody=16_384;
+const text=z.string().trim().min(1).max(500).refine(value=>!/[<>]/.test(value));
+const schema=z.object({question:text,answer:z.string().trim().min(1).max(5000).refine(value=>!/[<>]/.test(value)),category:text.max(80),active:z.boolean(),order:z.number().int().min(0).max(100000)});
+function actor(){return (process.env.ADMIN_USER||"OWNER").trim()||"OWNER";}async function auth(request:NextRequest,mutation=false){if(!await validAdminOwnerSession(request.cookies.get("shiny_admin_session")?.value||""))return "authentication_required";if(mutation){const csrf=request.headers.get("x-csrf-token")||"";const stored=request.cookies.get("shiny_csrf")?.value||"";if(!csrf||csrf!==stored||!await validCsrf(csrf))return "invalid_csrf";}return null;}async function rate(request:NextRequest){return !await allowAttempt("admin-faq:"+clientKey(request),1000);}
+export async function GET(request:NextRequest){const denied=await auth(request);if(denied)return NextResponse.json({error:denied},{status:401});if(await rate(request))return NextResponse.json({error:"rate_limited"},{status:429});try{return NextResponse.json({faq:await readFaq()},{headers:{"cache-control":"no-store"}});}catch{return NextResponse.json({error:"storage_error"},{status:500});}}
+export async function POST(request:NextRequest){const denied=await auth(request,true);if(denied)return NextResponse.json({error:denied},{status:denied==="invalid_csrf"?403:401});if(await rate(request))return NextResponse.json({error:"rate_limited"},{status:429});const body=await parseJsonBody(request,maxBody);if(!body.ok)return NextResponse.json({error:"invalid_input"},{status:body.reason==="too_large"?413:400});const parsed=schema.safeParse(body.data);if(!parsed.success)return NextResponse.json({error:"invalid_input"},{status:400});try{const faq=await createFaq(parsed.data);if(!faq)throw new Error("faq_create_failed");await audit("admin_faq_created",request,{actor:actor(),resource:faq.id,result:"success"});return NextResponse.json({ok:true,faq},{status:201});}catch{await audit("admin_faq_create_failed",request,{actor:actor(),result:"failure"});return NextResponse.json({error:"storage_error"},{status:500});}}

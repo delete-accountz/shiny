@@ -1,0 +1,65 @@
+# Dependencies
+/node_modules/
+
+# Next.js
+/.next/
+/out/
+
+# Environment files
+.env
+.env.local
+.env.*
+!.env.example
+
+# Local application data — project root only
+/Storage/
+/Logs/
+
+# Local caches and build artifacts — project root only
+/.cache/
+/.turbo/
+/.vercel/
+/coverage/
+/.tmp/
+/temp/
+/tmp/
+
+# TypeScript
+*.tsbuildinfo
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local test artifacts
+/test-results/
+/playwright-report/
+/blob-report/
+
+# Secrets and certificates
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Local archives and backups
+*.bak
+*.backup
+*.dump
+*.sqlite
+*.sqlite3
+
+# Existing local-only artifacts
+HandleTool/
+NextRestore/
+InstallTest/
+*.tgz
+node_modules_broken/
+NextFast/
+config.json
+Config/*.json
+Config/**/*.json
+npm-debug.log*
