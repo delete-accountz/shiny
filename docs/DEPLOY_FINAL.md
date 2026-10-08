@@ -1,139 +1,136 @@
 # Shiny Store — Guia Final de Deploy
 
-Data da preparação: 2026-10-08.
+Preparação: 2026-10-08.
 
-## Serviços
+## URLs
 
 - GitHub: https://github.com/delete-accountz/shiny
 - Vercel: https://vercel.com/delete-accountz/shiny-store
-- Preview validado: https://shiny-store-41qucnyzt-delete-accountz.vercel.app
-- Deploy inspect: https://vercel.com/delete-accountz/shiny-store/F7bkg4w1KDALfVJAGiHF6BFmSci6
+- Preview seguro atual: https://shiny-store-t2hw8ph4c-delete-accountz.vercel.app
+- Deploy inspect: https://vercel.com/delete-accountz/shiny-store/27YZfHdGmfsdY46Y8N6UFfmUeDYH
 - Alias de produção informado pelo Vercel: https://shiny-store-eight.vercel.app
-- Neon: projeto `shiny-store-prod`, id `square-flower-70047569`, região `aws-sa-east-1`
+- Neon: projeto shiny-store-prod, id square-flower-70047569, região aws-sa-east-1
 
-## Neon
+## Estado do Preview
 
-A branch principal contém as migrations 001–005. O comando idempotente de migração foi executado com a connection string obtida diretamente do Neon, sem exibir o segredo.
+Deploy Ready e build remoto PASS.
 
-Validações executadas:
-- migrations: PASS; nenhuma migration pendente.
-- concorrência de estoque: PASS; duas conexões reais, uma reserva.
-- concorrência de cupom: PASS; duas conexões reais, uma reserva.
-- restore: PASS; snapshot `post-migration-history` foi restaurado para uma branch isolada, confirmada como ready, com 27 tabelas públicas e 5 migrations, e a branch temporária foi removida.
-- snapshot manual disponível: `post-migration-history`, expiração 2026-10-15.
-
-Backup automático:
-- NÃO configurado.
-- O Neon recusou a criação de schedule: `backup schedule creation is not enabled for this project`.
-- A API atual do Neon exige plano pago para backup schedule.
-- Não foi feito upgrade nem cobrança.
-
-## Vercel
-
-O projeto foi relinkado a `delete-accountz/shiny-store` e ao repositório GitHub.
-
-Segredos configurados no Preview:
-- DATABASE_URL: Secret, Neon `shiny-store`
-- SESSION_HMAC_SECRET: Secret gerado aleatoriamente
-- WEBHOOK_ENCRYPTION_KEY: Secret gerado aleatoriamente
-- CRON_SECRET: Secret gerado aleatoriamente
-- HCAPTCHA_SECRET_KEY: Secret de teste oficial do hCaptcha
-
-Configurações do Preview:
+Configuração segura:
+- DATABASE_URL: Secret do Neon
+- SESSION_HMAC_SECRET: Secret aleatório
+- WEBHOOK_ENCRYPTION_KEY: Secret aleatório
+- CRON_SECRET: Secret aleatório
+- HCAPTCHA_SECRET_KEY: Secret oficial de teste do hCaptcha
+- NEXT_PUBLIC_HCAPTCHA_SITE_KEY: sitekey oficial de teste do hCaptcha
 - DATABASE_REQUIRED=true
 - SHINY_STORAGE_MODE=database
 - ADMIN_ACCESS_LEVEL=OWNER
-- RECONCILIATION_AUTOMATION_ENABLED=true
+- RECONCILIATION_AUTOMATION_ENABLED=false
 - TRUSTED_PROXY=false
 - TRUSTED_PROXY_HEADER=x-real-ip
 - PROMISSE_API_BASE_URL=https://api.promisse.com.br
-- NEXT_PUBLIC_HCAPTCHA_SITE_KEY: sitekey de teste oficial do hCaptcha
 
-O build remoto passou:
-- Next.js 16.3.8
-- TypeScript PASS
-- 29 páginas estáticas
-- todas as rotas compiladas
-- deploy Ready
+O Preview não possui cron. A reconciliação automática está desligada para impedir qualquer alteração automática no banco de produção.
 
-Proteção:
-- Deployment Protection do Vercel está ligada.
+O endpoint raiz e /Api/Csrf respondem 503 production_configuration_incomplete. Isso é esperado e confirma o fail-closed enquanto ADMIN_USER/ADMIN_ACCESS_KEY de Preview não forem fornecidos.
 
-O Preview respondeu `503 production_configuration_incomplete`. Isso é esperado neste estado porque `ADMIN_USER` e `ADMIN_ACCESS_KEY` reais não foram definidos. O fail-closed está funcional.
+## Neon
 
-## Cron
+Projeto: shiny-store-prod
+Região: aws-sa-east-1
+Banco: shiny_store
+Role: shiny_store_owner
 
-O arquivo de produção permanece com:
-`*/5 * * * *`
+Validações:
+- migrations 001–005: PASS; nenhuma migration pendente.
+- estoque concorrente: PASS; duas conexões reais, uma reserva.
+- cupom concorrente: PASS; duas conexões reais, uma reserva.
+- restore: PASS; snapshot restaurado para branch isolada, branch ficou ready, 27 tabelas públicas e 5 migrations verificadas; branch temporária removida.
+- snapshot manual: post-migration-history, expira em 2026-10-15.
 
-O plano Hobby rejeita essa frequência. Para o Preview foi usado temporariamente um cron diário, e depois o `vercel.json` local foi restaurado para a configuração de produção de 5 minutos.
+Backup automático:
+- NÃO configurado.
+- O projeto retornou que a criação de backup schedule não está habilitada.
+- Não houve upgrade de plano nem cobrança.
 
-Para Production, usar um plano que aceite 5 minutos ou um scheduler externo autenticado chamando:
-`POST/GET /Api/Internal/Reconciliation` conforme o contrato do projeto, com:
-`Authorization: Bearer <CRON_SECRET>`
+## Vercel
+
+O repositório GitHub está ligado ao projeto delete-accountz/shiny-store.
+
+Preview publicado com uma configuração sem cron para compatibilidade com Hobby e segurança operacional.
+
+O vercel.json local de Production permanece com:
+*/5 * * * *
+
+Esse cron continua bloqueado pelo plano Hobby. Para Production, usar plano compatível ou scheduler externo autenticado.
 
 ## HCaptcha
 
-O Preview está configurado com o par oficial de teste do hCaptcha para permitir validação segura sem usar uma credencial real.
+O Preview usa o par oficial de teste do hCaptcha.
 
-O par de teste não fornece proteção anti-bot real e NÃO deve ser promovido para Production.
+Esse par é somente para teste e não oferece proteção anti-bot real.
 
-Para Production:
-1. criar/selecionar o sitekey real no Dashboard hCaptcha;
-2. adicionar o hostname de produção ao allowlist;
-3. colocar o sitekey em `NEXT_PUBLIC_HCAPTCHA_SITE_KEY`;
-4. colocar o secret em `HCAPTCHA_SECRET_KEY`;
-5. validar `/siteverify` com POST form-encoded.
+Production deve usar sitekey/secret reais e, quando o allowlist estiver habilitado, registrar o hostname de produção no Dashboard do hCaptcha.
 
 ## Gate financeiro
 
-- Promisse NÃO configurado.
-- PROMISSE_API_KEY não configurada.
-- PROMISSE_WEBHOOK_SECRET não configurado.
-- Nenhuma cobrança real executada.
-- Nenhum webhook financeiro real enviado.
-- Checkout permanece bloqueado enquanto a configuração obrigatória não estiver completa.
+Promisse não está configurado.
+PROMISSE_API_KEY não está configurada.
+PROMISSE_WEBHOOK_SECRET não está configurado.
+Nenhuma cobrança foi criada.
+Nenhum webhook financeiro real foi enviado.
+Nenhuma chamada financeira real foi executada nesta preparação.
 
-A integração Promisse continua apontando apenas para a base contratual:
-https://api.promisse.com.br
+Checkout está bloqueado pelo fail-closed de configuração.
 
 ## Endpoints principais
 
-- `/Api/Csrf`
-- `/Api/Admin/Login`
-- `/Api/Admin/Logout`
-- `/Api/Auth/Login`
-- `/Api/Auth/Logout`
-- `/Api/Auth/Me`
-- `/Api/Checkout`
-- `/Api/Orders/[id]`
-- `/Api/Orders/[id]/Reconcile`
-- `/Api/Payment/[Id]`
-- `/Api/Webhooks/Promisse`
-- `/Api/Internal/Reconciliation`
+- /Api/Csrf
+- /Api/Admin/Login
+- /Api/Admin/Logout
+- /Api/Auth/Login
+- /Api/Auth/Logout
+- /Api/Auth/Me
+- /Api/Checkout
+- /Api/Orders/[id]
+- /Api/Orders/[id]/Reconcile
+- /Api/Payment/[Id]
+- /Api/Webhooks/Promisse
+- /Api/Internal/Reconciliation
 
-## Artefato de deploy
+## Artefato Vercel
 
-`.vercelignore` exclui do upload:
+.vercelignore exclui do upload:
 - /docs/
 - /tests/
 - /scripts/
 - /migrations/
 - /Logs/
 - /Storage/
-- node_modules, .next e arquivos de segredo/backup.
+- node_modules
+- .next
+- arquivos de segredo e backups
 
-Esses diretórios continuam no repositório para manutenção e auditoria, mas não entram no artefato do Vercel.
+Os diretórios continuam no GitHub para manutenção e auditoria; apenas não entram no artefato do Vercel.
 
-## Próxima liberação
+## Git
 
-Antes de Production:
-- definir ADMIN_USER e ADMIN_ACCESS_KEY de Production;
-- definir todos os secrets obrigatórios de Production;
-- configurar sitekey/secret reais do hCaptcha e o hostname;
-- garantir backup automático Neon quando o projeto tiver plano elegível;
-- resolver o cron de 5 minutos com plano compatível ou scheduler externo;
-- manter Promisse desativado até a autorização financeira explícita.
+Commit principal desta preparação:
+7a523f7 — Prepare production deployment
+
+Remote:
+https://github.com/delete-accountz/shiny.git
+
+O scanner do índice retornou SECRET_SCAN_PASS antes do commit.
+
+## Próxima etapa para Production
+
+Definir ADMIN_USER e ADMIN_ACCESS_KEY de Production.
+Definir DATABASE_URL e secrets obrigatórios no ambiente Production.
+Configurar sitekey/secret reais do hCaptcha e hostname.
+Habilitar backup automático Neon quando o projeto tiver plano elegível.
+Resolver o cron de 5 minutos com plano compatível ou scheduler externo.
+Manter Promisse desativado até autorização financeira explícita.
 
 Gate financeiro final:
-`AUTORIZO TESTE FINANCEIRO REAL CONTROLADO`
+AUTORIZO TESTE FINANCEIRO REAL CONTROLADO
