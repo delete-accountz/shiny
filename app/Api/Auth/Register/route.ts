@@ -29,7 +29,14 @@ export async function POST(request:NextRequest){
   let decoded:unknown;
   try{decoded=JSON.parse(body.body);}catch{return NextResponse.json({error:"invalid_request"},{status:400});}
   const parsed=schema.safeParse(decoded);
-  if(!parsed.success)return NextResponse.json({error:"invalid_request"},{status:400});
+  if(!parsed.success){
+    const fields=new Set(parsed.error.issues.map(issue=>String(issue.path[0]||"")));
+    if(fields.has("username"))return NextResponse.json({error:"invalid_username"},{status:400});
+    if(fields.has("email"))return NextResponse.json({error:"invalid_email"},{status:400});
+    if(fields.has("hcaptchaToken"))return NextResponse.json({error:"captcha_invalid"},{status:400});
+    if(fields.has("password")||fields.has("confirmPassword"))return NextResponse.json({error:"password_invalid"},{status:400});
+    return NextResponse.json({error:"invalid_request"},{status:400});
+  }
   const {username,email,password,confirmPassword,hcaptchaToken}=parsed.data;
   if(password!==confirmPassword||!passwordIsStrong(password))return NextResponse.json({error:"password_invalid"},{status:400});
   const captcha=await verifyHCaptcha(hcaptchaToken,request);
