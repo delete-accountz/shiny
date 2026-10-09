@@ -12,12 +12,18 @@ const maxBody=16_384;
 
 export async function POST(request:NextRequest){
   const key=clientKey(request);
-  if(!await allowAuthAttempt("register",key)){await auditBestEffort("user_register_rate_limited",request);return NextResponse.json({error:"rate_limited"},{status:429});}
+  let allowed:boolean;
+  try{allowed=await allowAuthAttempt("register",key);}
+  catch{await auditFailure("user_register_rate_limit_unavailable",request,{reason:"rate_limit_store_unavailable"}).catch(()=>{});return NextResponse.json({error:"registration_unavailable"},{status:503});}
+  if(!allowed){await auditBestEffort("user_register_rate_limited",request);return NextResponse.json({error:"rate_limited"},{status:429});}
   const contentLength=Number(request.headers.get("content-length")||0);
   if(contentLength>maxBody)return NextResponse.json({error:"invalid_request"},{status:413});
   const csrf=request.headers.get("x-csrf-token")||"";
   const stored=request.cookies.get("shiny_csrf")?.value||"";
-  if(!csrf||csrf!==stored||!await validCsrf(csrf)){await auditBestEffort("user_register_csrf_rejected",request);return NextResponse.json({error:"invalid_csrf"},{status:403});}
+  let csrfValid=false;
+  try{csrfValid=Boolean(csrf&&csrf===stored&&await validCsrf(csrf));}
+  catch{await auditFailure("user_register_csrf_store_unavailable",request,{reason:"csrf_store_unavailable"}).catch(()=>{});return NextResponse.json({error:"registration_unavailable"},{status:503});}
+  if(!csrfValid){await auditBestEffort("user_register_csrf_rejected",request);return NextResponse.json({error:"invalid_csrf"},{status:403});}
   const body=await readJsonBody(request,maxBody);
   if(!body.ok)return NextResponse.json({error:"invalid_request"},{status:body.reason==="too_large"?413:400});
   let decoded:unknown;
