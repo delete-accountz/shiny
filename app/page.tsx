@@ -178,14 +178,29 @@ const refreshOrder=useCallback(async()=>{
   finally{setCheckoutRefreshing(false);}
 },[checkout,checkoutRefreshing,notify]);
 const submitAuth=async(event:React.FormEvent<HTMLFormElement>)=>{
-  event.preventDefault();setAuthLoading(true);setAuthError("");
+  event.preventDefault();
+  const form=new FormData(event.currentTarget);
+  setAuthError("");
+  if(authMode==="register"){
+    const password=String(form.get("password")||"");
+    const confirmation=String(form.get("confirmPassword")||"");
+    const passwordProblems:string[]=[];
+    if(password.length<10||password.length>128)passwordProblems.push("Use uma senha com 10 a 128 caracteres.");
+    if(!/[a-z]/.test(password))passwordProblems.push("Inclua pelo menos uma letra minúscula.");
+    if(!/[A-Z]/.test(password))passwordProblems.push("Inclua pelo menos uma letra maiúscula.");
+    if(!/[0-9]/.test(password))passwordProblems.push("Inclua pelo menos um número.");
+    if(!/[^A-Za-z0-9]/.test(password))passwordProblems.push("Inclua pelo menos um símbolo.");
+    if(password!==confirmation)passwordProblems.push("A confirmação da senha deve ser idêntica à senha.");
+    if(passwordProblems.length){setAuthError(passwordProblems.join(" "));return;}
+    if(!captchaToken){setAuthError("Conclua o hCaptcha antes de criar a conta.");return;}
+  }
+  setAuthLoading(true);
   try{
-    const form=new FormData(event.currentTarget);const csrf=await getCsrf();
+    const csrf=await getCsrf();
     const payload=authMode==="login"?{email:String(form.get("email")||""),password:String(form.get("password")||"")}:{username:String(form.get("username")||""),email:String(form.get("email")||""),password:String(form.get("password")||""),confirmPassword:String(form.get("confirmPassword")||""),hcaptchaToken:captchaToken};
-    if(authMode==="register"&&!captchaToken){setAuthError("Complete o CAPTCHA antes de criar a conta.");return;}
     const response=await fetch(authMode==="login"?"/Api/Auth/Login":"/Api/Auth/Register",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json","x-csrf-token":csrf},body:JSON.stringify(payload)});
     const data=await response.json().catch(()=>({})) as {user?:{id:string;username:string;email:string};message?:string;error?:string};
-    if(!response.ok){const messages:Record<string,string>={rate_limited:"Muitas tentativas. Aguarde e tente novamente.",captcha_invalid:"CAPTCHA inválido. Complete novamente.",captcha_unavailable:"O CAPTCHA está temporariamente indisponível. Tente novamente.",captcha_not_configured:"CAPTCHA não configurado no servidor.",password_invalid:"A senha precisa ter 10+ caracteres, maiúscula, minúscula, número e símbolo; a confirmação deve coincidir.",registration_failed:"Não foi possível criar a conta com esses dados.",invalid_csrf:"Sessão de formulário expirada. Tente novamente.",invalid_credentials:"Email ou senha inválidos."};setAuthError(messages[data.error||""]||data.message||"Não foi possível concluir a operação.");return;}
+    if(!response.ok){const messages:Record<string,string>={rate_limited:"Muitas tentativas. Aguarde e tente novamente.",captcha_invalid:"hCaptcha recusou a verificação. Recarregue o CAPTCHA e tente novamente.",captcha_unavailable:"O serviço hCaptcha está temporariamente indisponível. Tente novamente mais tarde.",captcha_not_configured:"hCaptcha não está configurado no servidor.",captcha_misconfigured:"A configuração do hCaptcha no servidor não corresponde à chave pública. A equipe precisa corrigir a configuração.",password_invalid:"As senhas devem coincidir e a senha precisa ter 10+ caracteres, maiúscula, minúscula, número e símbolo.",registration_failed:"Este email ou nome de usuário já pode estar cadastrado. Tente entrar na conta.",registration_unavailable:"O armazenamento de contas está temporariamente indisponível. Nenhuma cobrança foi feita.",account_created_login_required:"A conta foi criada, mas não foi possível iniciar a sessão. Entre com seu email e senha.",auth_unavailable:"O serviço de autenticação está temporariamente indisponível. Tente novamente mais tarde.",invalid_request:"Confira o nome de usuário, email e campos obrigatórios.",invalid_csrf:"Sessão do formulário expirada. Recarregue a página e tente novamente.",invalid_credentials:"Email ou senha inválidos."};if(data.error==="account_created_login_required")setAuthMode("login");setAuthError(messages[data.error||""]||data.message||"Não foi possível concluir a operação. Tente novamente.");return;}
     if(data.user){setUser(data.user);setAuth(false);setCaptchaToken("");notify("success",authMode==="login"?"Bem-vindo, "+data.user.username+".":"Conta criada para "+data.user.username+".");}
   }catch{setAuthError("Não foi possível conectar ao servidor. Tente novamente.");}finally{setCaptchaToken("");setCaptchaResetSignal(value=>value+1);setAuthLoading(false);}
 };

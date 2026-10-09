@@ -12,7 +12,7 @@ const adminSessionLifetime=60*60_000;
 const revokedSessionsPath=path.join(process.cwd(),"Storage",".revoked-sessions.json");
 let revokedLoaded=false;
 const revokedSessions=new Map<string,number>();
-const databaseMode=()=>process.env.SHINY_STORAGE_MODE==="database"&&process.env.DATABASE_REQUIRED==="true";
+const databaseMode=()=>{const enabled=process.env.SHINY_STORAGE_MODE==="database"&&process.env.DATABASE_REQUIRED==="true";if(process.env.NODE_ENV==="production"&&!enabled)throw new Error("database_mode_required");return enabled;};
 
 function loadRevokedSessions(){
   if(revokedLoaded)return;

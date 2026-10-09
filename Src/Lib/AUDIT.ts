@@ -7,6 +7,7 @@ import {auditDb} from "./DB/AUDIT";
 const maxLogBytes=5*1024*1024;
 const maxArchives=10;
 let chain:Promise<void>=Promise.resolve();
+function databaseMode(){const enabled=process.env.SHINY_STORAGE_MODE==="database"&&process.env.DATABASE_REQUIRED==="true";if(process.env.NODE_ENV==="production"&&!enabled)throw new Error("database_mode_required");return enabled;}
 
 function safe(value:unknown){return String(value).replace(/[\r\n\t]+/g," ").slice(0,500);}
 function filteredDetails(details:Record<string,string|number|boolean>){
@@ -41,12 +42,16 @@ async function write(event:string,request:Request,details:Record<string,string|n
   await appendBounded(file,line);
 }
 export async function audit(event:string,request:Request,details:Record<string,string|number|boolean>={}){
-  if(process.env.SHINY_STORAGE_MODE==="database"&&process.env.DATABASE_REQUIRED==="true")return auditDb(event,request,details,false);
+  if(databaseMode())return auditDb(event,request,details,false);
   const previous=chain;let release!:()=>void;chain=new Promise(resolve=>{release=resolve});await previous;
   try{await write(event,request,details,false);}finally{release();}
 }
+export async function auditBestEffort(event:string,request:Request,details:Record<string,string|number|boolean>={}){
+  try{await audit(event,request,details);}catch{await auditFailure(event,request,{reason:"audit_write_failed"}).catch(()=>{});}
+}
+
 export async function auditFailure(event:string,request:Request,details:Record<string,string|number|boolean>={}){
-  if(process.env.SHINY_STORAGE_MODE==="database"&&process.env.DATABASE_REQUIRED==="true")return auditDb(event,request,details,true).catch(()=>{});
+  if(databaseMode())return auditDb(event,request,details,true).catch(()=>{});
   const previous=chain;let release!:()=>void;chain=new Promise(resolve=>{release=resolve});await previous;
   try{await write(event,request,details,true);}catch{}finally{release();}
 }

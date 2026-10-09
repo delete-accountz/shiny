@@ -1,7 +1,7 @@
 import {NextRequest,NextResponse} from "next/server";
 import {z} from "zod";
 import {allowAuthAttempt,clientKey,createUserSession,validCsrf} from "@/Lib/SECURITY";
-import {audit} from "@/Lib/AUDIT";
+import {auditBestEffort,auditFailure} from "@/Lib/AUDIT";
 import {createUser,passwordIsStrong} from "@/Lib/AUTH";
 import {verifyHCaptcha} from "@/Lib/HCAPTCHA";
 import {dispatchWebhookEvent} from "@/Lib/WEBHOOKS";
@@ -12,31 +12,38 @@ const maxBody=16_384;
 
 export async function POST(request:NextRequest){
   const key=clientKey(request);
-  if(!await allowAuthAttempt("register",key)){await audit("user_register_rate_limited",request);return NextResponse.json({error:"rate_limited"},{status:429});}
+  if(!await allowAuthAttempt("register",key)){await auditBestEffort("user_register_rate_limited",request);return NextResponse.json({error:"rate_limited"},{status:429});}
   const contentLength=Number(request.headers.get("content-length")||0);
   if(contentLength>maxBody)return NextResponse.json({error:"invalid_request"},{status:413});
   const csrf=request.headers.get("x-csrf-token")||"";
   const stored=request.cookies.get("shiny_csrf")?.value||"";
-  if(!csrf||csrf!==stored||!await validCsrf(csrf)){await audit("user_register_csrf_rejected",request);return NextResponse.json({error:"invalid_csrf"},{status:403});}
+  if(!csrf||csrf!==stored||!await validCsrf(csrf)){await auditBestEffort("user_register_csrf_rejected",request);return NextResponse.json({error:"invalid_csrf"},{status:403});}
   const body=await readJsonBody(request,maxBody);
   if(!body.ok)return NextResponse.json({error:"invalid_request"},{status:body.reason==="too_large"?413:400});
-  const parsed=schema.safeParse(JSON.parse(body.body));
+  let decoded:unknown;
+  try{decoded=JSON.parse(body.body);}catch{return NextResponse.json({error:"invalid_request"},{status:400});}
+  const parsed=schema.safeParse(decoded);
   if(!parsed.success)return NextResponse.json({error:"invalid_request"},{status:400});
   const {username,email,password,confirmPassword,hcaptchaToken}=parsed.data;
   if(password!==confirmPassword||!passwordIsStrong(password))return NextResponse.json({error:"password_invalid"},{status:400});
   const captcha=await verifyHCaptcha(hcaptchaToken,request);
   if(!captcha.ok){
-    await audit("user_register_captcha_rejected",request,{reason:captcha.reason});
+    await auditBestEffort("user_register_captcha_rejected",request,{reason:captcha.reason});
     if(captcha.reason==="not_configured")return NextResponse.json({error:"captcha_not_configured"},{status:503});
+    if(captcha.reason==="misconfigured")return NextResponse.json({error:"captcha_misconfigured"},{status:503});
     if(captcha.reason==="network")return NextResponse.json({error:"captcha_unavailable"},{status:503});
     return NextResponse.json({error:"captcha_invalid"},{status:400});
   }
-  const user=await createUser(username,email,password);
-  if(!user){await audit("user_register_rejected",request);return NextResponse.json({error:"registration_failed"},{status:400});}
-  const session=await createUserSession(user.id);
+  let user;
+  try{user=await createUser(username,email,password);}
+  catch{await auditFailure("user_register_storage_failed",request,{reason:"user_store_unavailable"}).catch(()=>{});return NextResponse.json({error:"registration_unavailable"},{status:503});}
+  if(!user){await auditBestEffort("user_register_rejected",request);return NextResponse.json({error:"registration_failed"},{status:400});}
+  let session:string;
+  try{session=await createUserSession(user.id);}
+  catch{await auditFailure("user_register_session_failed",request,{reason:"session_store_unavailable"}).catch(()=>{});return NextResponse.json({error:"account_created_login_required"},{status:503});}
   const response=NextResponse.json({ok:true,user:{id:user.id,username:user.username,email:user.email}});
   response.cookies.set({name:"shiny_user_session",value:session,httpOnly:true,secure:process.env.NODE_ENV==="production",sameSite:"strict",path:"/",maxAge:7*24*60*60});
-  await audit("user_register_success",request,{userId:user.id});
+  await auditBestEffort("user_register_success",request,{userId:user.id});
   void dispatchWebhookEvent("customer.created",{customerId:user.id,username:user.username},request).catch(()=>{});
   return response;
 }

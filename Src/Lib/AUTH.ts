@@ -7,7 +7,7 @@ import {query,withTransaction} from "./DB";
 type User={id:string;username:string;email:string;passwordHash:string;createdAt:string;updatedAt?:string};
 const defaultUsersPath=path.join(process.cwd(),"Storage","users.json");
 
-function databaseMode(){return process.env.SHINY_STORAGE_MODE==="database"&&process.env.DATABASE_REQUIRED==="true";}
+function databaseMode(){const enabled=process.env.SHINY_STORAGE_MODE==="database"&&process.env.DATABASE_REQUIRED==="true";if(process.env.NODE_ENV==="production"&&!enabled)throw new Error("database_mode_required");return enabled;}
 
 async function dbFindUserByEmail(email:string){
   const rows=await query<User>(`SELECT id,username,email,password_hash AS "passwordHash",created_at AS "createdAt",updated_at AS "updatedAt"

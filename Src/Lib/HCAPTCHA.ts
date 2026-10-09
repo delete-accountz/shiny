@@ -1,6 +1,6 @@
 import {isIP} from "node:net";
 const endpoint="https://api.hcaptcha.com/siteverify";
-export type HCaptchaResult={ok:true}|{ok:false;reason:"not_configured"|"invalid"|"network"};
+export type HCaptchaResult={ok:true}|{ok:false;reason:"not_configured"|"misconfigured"|"invalid"|"network"};
 function trustedRemoteIp(request:Request){
   if(process.env.TRUSTED_PROXY!=="true")return "";
   const header=(process.env.TRUSTED_PROXY_HEADER||"x-real-ip").trim().toLowerCase();
@@ -15,6 +15,6 @@ export async function verifyHCaptcha(token:string,request:Request):Promise<HCapt
  const ip=trustedRemoteIp(request);
  const form=new URLSearchParams({secret,sitekey,response:token}); if(ip)form.set("remoteip",ip);
  const controller=new AbortController(); const timeout=setTimeout(()=>controller.abort(),5000);
- try{const response=await fetch(endpoint,{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:form,signal:controller.signal,cache:"no-store"}); if(!response.ok)return {ok:false,reason:"network"}; const result=await response.json() as {success?:boolean}; return result.success===true?{ok:true}:{ok:false,reason:"invalid"};}
+ try{const response=await fetch(endpoint,{method:"POST",headers:{"content-type":"application/x-www-form-urlencoded"},body:form,signal:controller.signal,cache:"no-store"}); if(!response.ok)return {ok:false,reason:"network"}; const result=await response.json() as {success?:boolean;"error-codes"?:unknown}; if(result.success===true)return {ok:true}; const codes=Array.isArray(result["error-codes"])?result["error-codes"].filter((code):code is string=>typeof code==="string"):[]; if(codes.some(code=>["invalid-input-secret","missing-input-secret","sitekey-secret-mismatch","invalid-sitekey","not-using-dummy-passcode"].includes(code)))return {ok:false,reason:"misconfigured"}; return {ok:false,reason:"invalid"};}
  catch{return {ok:false,reason:"network"};} finally{clearTimeout(timeout);}
 }
